@@ -99,6 +99,9 @@ async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: Misr
 			}
 		}
 
+		// Store results globally for later use
+		(panel as any).processedResults = processedResults;
+
 		// Generate HTML content for the webview
 		panel.webview.html = generateWebviewContent(processedResults);
 
@@ -157,13 +160,36 @@ async function handleGenerateFix(data: any, context: vscode.ExtensionContext, pa
 		const fix = await aiFixGenerator.generateFix(violatedCode, data.sarifResult, data.misraRule);
 		
 		// Send the fix back to the webview
-		panel.webview.postMessage({
-			command: 'fixGenerated',
-			data: {
-				id: data.id,
-				fix: fix
-			}
-		});
+		console.log('=== Sending fix to webview ===');
+		console.log('Panel active?', panel.active);
+		console.log('Panel visible?', panel.visible);
+		console.log('Fix data:', JSON.stringify(fix, null, 2));
+		
+		try {
+			const result = panel.webview.postMessage({
+				command: 'fixGenerated',
+				data: {
+					id: data.id,
+					fix: fix
+				}
+			});
+			console.log('PostMessage result:', result);
+			
+			// Alternative approach: Update the HTML directly
+			setTimeout(() => {
+				console.log('Updating webview HTML directly...');
+				const storedResults = (panel as any).processedResults;
+				if (storedResults) {
+					const updatedHtml = generateWebviewContentWithFix(storedResults, data.id, fix);
+					panel.webview.html = updatedHtml;
+				}
+			}, 1000);
+			
+		} catch (error) {
+			console.log('PostMessage error:', error);
+		}
+		
+		console.log('=== Fix sent to webview ===');
 	} catch (error) {
 		vscode.window.showErrorMessage(`Failed to generate fix: ${error}`);
 	}
@@ -171,8 +197,16 @@ async function handleGenerateFix(data: any, context: vscode.ExtensionContext, pa
 
 async function handleApplyFix(data: any) {
 	try {
+		console.log('=== Apply Fix Debug ===');
+		console.log('Data received:', JSON.stringify(data, null, 2));
+		
 		const uri = vscode.Uri.file(data.filePath);
+		console.log('File URI:', uri.toString());
+		
 		const document = await vscode.workspace.openTextDocument(uri);
+		console.log('Document opened:', document.fileName);
+		console.log('Document line count:', document.lineCount);
+		
 		await vscode.window.showTextDocument(document);
 		
 		// Apply the fix
@@ -184,16 +218,34 @@ async function handleApplyFix(data: any) {
 			data.endColumn - 1
 		);
 		
-		edit.replace(uri, range, data.fixedCode);
-		await vscode.workspace.applyEdit(edit);
+		console.log('Range to replace:', range);
+		console.log('Text to replace with:', data.fixedCode);
 		
-		vscode.window.showInformationMessage('Fix applied successfully!');
+		// Get current text in range for debugging
+		const currentText = document.getText(range);
+		console.log('Current text in range:', currentText);
+		
+		edit.replace(uri, range, data.fixedCode);
+		const result = await vscode.workspace.applyEdit(edit);
+		
+		console.log('Edit applied successfully:', result);
+		
+		if (result) {
+			vscode.window.showInformationMessage('Fix applied successfully!');
+		} else {
+			vscode.window.showErrorMessage('Failed to apply edit - edit was rejected');
+		}
 	} catch (error) {
+		console.log('Apply fix error:', error);
 		vscode.window.showErrorMessage(`Failed to apply fix: ${error}`);
 	}
 }
 
-function generateWebviewContent(results: any[]): string {
+function generateWebviewContentWithFix(results: any[], fixId: number, fix: any): string {
+	return generateWebviewContent(results, fixId, fix);
+}
+
+function generateWebviewContent(results: any[], fixId?: number, fix?: any): string {
 	return `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -263,9 +315,19 @@ function generateWebviewContent(results: any[]): string {
 				
 				<button class="button" onclick="generateFix(${index})">Generate AI Fix</button>
 				
-				<div class="fix-section" id="fix-${index}">
+				<div class="fix-section" id="fix-${index}" ${fixId === index ? 'style="display: block;"' : ''}>
 					<h3>AI-Generated Fix:</h3>
-					<div id="fix-content-${index}"></div>
+					<div id="fix-content-${index}">
+						${fixId === index && fix ? `
+							<h4>Original Code:</h4>
+							<div class="code-block">${fix.originalCode}</div>
+							<h4>Fixed Code:</h4>
+							<div class="code-block">${fix.fixedCode}</div>
+							<h4>Explanation:</h4>
+							<p>${fix.explanation}</p>
+							<button class="button" onclick="applyFix(${index})">Apply Fix</button>
+						` : ''}
+					</div>
 				</div>
 			</div>
 		`).join('')}
@@ -289,9 +351,19 @@ function generateWebviewContent(results: any[]): string {
 				document.getElementById('fix-' + index).style.display = 'block';
 			}
 			
-			function applyFix(index, fix) {
+			function applyFix(index) {
+				const fix = window.fixes[index];
+				if (!fix) {
+					console.error('No fix found for index:', index);
+					return;
+				}
+				
 				const violationData = ${JSON.stringify(results)}[index];
 				const location = violationData.sarifResult.locations[0];
+				
+				console.log('Applying fix for index:', index);
+				console.log('Fix data:', fix);
+				console.log('Location data:', location);
 				
 				vscode.postMessage({
 					command: 'applyFix',
@@ -308,6 +380,7 @@ function generateWebviewContent(results: any[]): string {
 			
 			window.addEventListener('message', event => {
 				const message = event.data;
+				console.log('Webview received message:', message);
 				switch (message.command) {
 					case 'fixGenerated':
 						const fix = message.data.fix;
