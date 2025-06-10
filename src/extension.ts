@@ -124,15 +124,37 @@ async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: Misr
 }
 
 async function handleGenerateFix(data: any, context: vscode.ExtensionContext, panel: vscode.WebviewPanel) {
-	const apiKey = context.globalState.get<string>('openai-api-key');
+	// Check for API key in environment variable first, then fallback to stored config
+	let apiKey = process.env.OPENAI_API_KEY || context.globalState.get<string>('openai-api-key');
+	
 	if (!apiKey) {
-		vscode.window.showErrorMessage('OpenAI API key not configured. Please run "Configure OpenAI API Key" command first.');
+		vscode.window.showErrorMessage('OpenAI API key not found. Please set OPENAI_API_KEY environment variable or run "Configure OpenAI API Key" command.');
 		return;
 	}
 
 	try {
+		// Extract actual code from the file
+		let violatedCode = 'Could not extract code';
+		const location = data.sarifResult.locations[0];
+		
+		if (location && location.uri) {
+			try {
+				const fileUri = location.uri.startsWith('file://') ? location.uri.slice(7) : location.uri;
+				const fileContent = fs.readFileSync(fileUri, 'utf8');
+				const lines = fileContent.split('\n');
+				
+				// Extract the relevant lines around the violation (with some context)
+				const startLine = Math.max(0, (location.startLine || 1) - 3);
+				const endLine = Math.min(lines.length, (location.endLine || location.startLine || 1) + 2);
+				violatedCode = lines.slice(startLine, endLine).join('\n');
+			} catch (error) {
+				console.error('Failed to extract code from file:', error);
+				violatedCode = `Error reading file: ${location.uri}`;
+			}
+		}
+
 		const aiFixGenerator = new AiFixGenerator(apiKey);
-		const fix = await aiFixGenerator.generateFix(data.violatedCode, data.sarifResult, data.misraRule);
+		const fix = await aiFixGenerator.generateFix(violatedCode, data.sarifResult, data.misraRule);
 		
 		// Send the fix back to the webview
 		panel.webview.postMessage({
