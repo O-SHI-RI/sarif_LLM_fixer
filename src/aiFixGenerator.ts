@@ -129,14 +129,15 @@ Violation Message: ${sarifResult.message}
 MISRA-C Remediation Guidance: ${misraRule.remediation}
 
 Please provide:
-1. A fixed version of the code that complies with the MISRA-C rule
-2. A clear explanation of what was changed and why
-3. Ensure the fix maintains the original functionality while addressing the violation
+1. ONLY fix the specific line(s) that violate the rule - do not include headers, function declarations, or complete programs
+2. Keep the fix minimal and focused on the violation
+3. Maintain the original code structure and context
+4. Provide a clear explanation of what was changed and why
 
 Format your response as:
 FIXED_CODE:
 \`\`\`c
-[fixed code here]
+[only the fixed line(s) here - no complete program]
 \`\`\`
 
 EXPLANATION:

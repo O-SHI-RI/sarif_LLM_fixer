@@ -200,7 +200,20 @@ async function handleApplyFix(data: any) {
 		console.log('=== Apply Fix Debug ===');
 		console.log('Data received:', JSON.stringify(data, null, 2));
 		
-		const uri = vscode.Uri.file(data.filePath);
+		// Convert relative path to absolute path
+		let filePath = data.filePath;
+		if (!path.isAbsolute(filePath)) {
+			// Try to find the file in the workspace
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (workspaceFolders && workspaceFolders.length > 0) {
+				filePath = path.join(workspaceFolders[0].uri.fsPath, filePath);
+			}
+		}
+		
+		console.log('Original file path:', data.filePath);
+		console.log('Resolved file path:', filePath);
+		
+		const uri = vscode.Uri.file(filePath);
 		console.log('File URI:', uri.toString());
 		
 		const document = await vscode.workspace.openTextDocument(uri);
@@ -209,13 +222,17 @@ async function handleApplyFix(data: any) {
 		
 		await vscode.window.showTextDocument(document);
 		
-		// Apply the fix
+		// Apply the fix - expand range to cover the entire line
 		const edit = new vscode.WorkspaceEdit();
+		const startLine = data.startLine - 1;
+		const endLine = data.endLine - 1;
+		
+		// Use the entire line instead of just the column range
 		const range = new vscode.Range(
-			data.startLine - 1,
-			data.startColumn - 1,
-			data.endLine - 1,
-			data.endColumn - 1
+			startLine,
+			0, // Start from beginning of line
+			endLine,
+			document.lineAt(endLine).text.length // End at end of line
 		);
 		
 		console.log('Range to replace:', range);
@@ -325,7 +342,7 @@ function generateWebviewContent(results: any[], fixId?: number, fix?: any): stri
 							<div class="code-block">${fix.fixedCode}</div>
 							<h4>Explanation:</h4>
 							<p>${fix.explanation}</p>
-							<button class="button" onclick="applyFix(${index})">Apply Fix</button>
+							<button class="button" onclick="alert('Button clicked!'); applyFixDirect(${index}, ${JSON.stringify(fix).replace(/"/g, '&quot;').replace(/\n/g, '\\n')})">Apply Fix</button>
 						` : ''}
 					</div>
 				</div>
@@ -351,9 +368,37 @@ function generateWebviewContent(results: any[], fixId?: number, fix?: any): stri
 				document.getElementById('fix-' + index).style.display = 'block';
 			}
 			
+			function applyFixDirect(index, fix) {
+				alert('Apply Fix Direct called! Index: ' + index);
+				
+				const violationData = ${JSON.stringify(results)}[index];
+				const location = violationData.sarifResult.locations[0];
+				
+				console.log('Applying fix for index:', index);
+				console.log('Fix data:', fix);
+				console.log('Location data:', location);
+				
+				alert('About to send message to extension');
+				
+				vscode.postMessage({
+					command: 'applyFix',
+					data: {
+						filePath: location.uri,
+						startLine: location.startLine,
+						startColumn: location.startColumn,
+						endLine: location.endLine,
+						endColumn: location.endColumn,
+						fixedCode: fix.fixedCode
+					}
+				});
+			}
+			
 			function applyFix(index) {
+				alert('Apply Fix clicked! Index: ' + index);
+				
 				const fix = window.fixes[index];
 				if (!fix) {
+					alert('No fix found for index: ' + index);
 					console.error('No fix found for index:', index);
 					return;
 				}
@@ -364,6 +409,8 @@ function generateWebviewContent(results: any[], fixId?: number, fix?: any): stri
 				console.log('Applying fix for index:', index);
 				console.log('Fix data:', fix);
 				console.log('Location data:', location);
+				
+				alert('About to send message to extension');
 				
 				vscode.postMessage({
 					command: 'applyFix',
