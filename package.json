@@ -31,6 +31,14 @@
           "title": "SARIF AI Fixer: Analyze SARIF File"
         },
         {
+          "command": "sarif-ai-fixer.configureAiApi",
+          "title": "SARIF AI Fixer: Configure AI API"
+        },
+        {
+          "command": "sarif-ai-fixer.showApiStatus",
+          "title": "SARIF AI Fixer: Show API Status"
+        },
+        {
           "command": "sarif-ai-fixer.configureApiKey",
           "title": "SARIF AI Fixer: Configure OpenAI API Key"
         },

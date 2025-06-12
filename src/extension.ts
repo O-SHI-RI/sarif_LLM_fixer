@@ -40,8 +40,48 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// Command to configure OpenAI API key
-	const configureApiKeyCommand = vscode.commands.registerCommand('sarif-ai-fixer.configureApiKey', async () => {
+
+	// Unified command to configure AI API (choose between OpenAI and Azure OpenAI)
+	const configureAiApiCommand = vscode.commands.registerCommand('sarif-ai-fixer.configureAiApi', async () => {
+		// Ask user to choose API provider
+		const apiProvider = await vscode.window.showQuickPick([
+			{
+				label: '$(cloud) OpenAI',
+				detail: 'Use OpenAI API directly (requires OpenAI API key)',
+				value: 'openai'
+			},
+			{
+				label: '$(azure) Azure OpenAI',
+				detail: 'Use Azure OpenAI service (requires Azure OpenAI deployment)',
+				value: 'azure'
+			}
+		], {
+			placeHolder: 'Choose your AI API provider',
+			title: 'SARIF AI Fixer - API Configuration'
+		});
+
+		if (!apiProvider) return;
+
+		if (apiProvider.value === 'openai') {
+			// Configure OpenAI
+			await configureOpenAiApi(context);
+		} else {
+			// Configure Azure OpenAI
+			await configureAzureOpenAiApi(context);
+		}
+	});
+
+	// Command to configure Azure OpenAI
+	const configureAzureApiCommand = vscode.commands.registerCommand('sarif-ai-fixer.configureAzureApi', async () => {
+		await configureAzureOpenAiApi(context);
+	});
+
+	// Legacy command to configure OpenAI API key (keep for backward compatibility)
+	const legacyConfigureApiKeyCommand = vscode.commands.registerCommand('sarif-ai-fixer.configureApiKey', async () => {
+		await configureOpenAiApi(context);
+	});
+
+	async function configureOpenAiApi(context: vscode.ExtensionContext) {
 		const apiKey = await vscode.window.showInputBox({
 			prompt: 'Enter your OpenAI API key',
 			password: true,
@@ -56,12 +96,11 @@ export function activate(context: vscode.ExtensionContext) {
 		if (apiKey) {
 			await context.globalState.update('openai-api-key', apiKey);
 			await context.globalState.update('api-type', 'openai');
-			vscode.window.showInformationMessage('OpenAI API key configured successfully!');
+			vscode.window.showInformationMessage('✅ OpenAI API configured successfully!');
 		}
-	});
+	}
 
-	// Command to configure Azure OpenAI
-	const configureAzureApiCommand = vscode.commands.registerCommand('sarif-ai-fixer.configureAzureApi', async () => {
+	async function configureAzureOpenAiApi(context: vscode.ExtensionContext) {
 		const apiKey = await vscode.window.showInputBox({
 			prompt: 'Enter your Azure OpenAI API key',
 			password: true,
@@ -114,7 +153,54 @@ export function activate(context: vscode.ExtensionContext) {
 		await context.globalState.update('azure-deployment-name', deploymentName);
 		await context.globalState.update('azure-api-version', apiVersion || '2024-02-15-preview');
 
-		vscode.window.showInformationMessage('Azure OpenAI API configured successfully!');
+		vscode.window.showInformationMessage('✅ Azure OpenAI API configured successfully!');
+	}
+
+	// Command to show current API configuration status
+	const showApiStatusCommand = vscode.commands.registerCommand('sarif-ai-fixer.showApiStatus', async () => {
+		const apiConfig = await buildApiConfig(context);
+		
+		if (!apiConfig) {
+			vscode.window.showInformationMessage(
+				'❌ No AI API configured. Use "SARIF AI Fixer: Configure AI API" to set up your provider.',
+				'Configure Now'
+			).then(selection => {
+				if (selection === 'Configure Now') {
+					vscode.commands.executeCommand('sarif-ai-fixer.configureAiApi');
+				}
+			});
+			return;
+		}
+
+		let statusMessage = '';
+		if (apiConfig.apiType === 'azure') {
+			statusMessage = `✅ **Azure OpenAI** configured\n\n` +
+						   `• Endpoint: ${apiConfig.apiUrl}\n` +
+						   `• Deployment: ${apiConfig.deploymentName}\n` +
+						   `• API Version: ${apiConfig.apiVersion}\n` +
+						   `• Configuration: ${process.env.AZURE_OPENAI_API_KEY ? 'Environment Variable' : 'VS Code Settings'}`;
+		} else {
+			statusMessage = `✅ **OpenAI** configured\n\n` +
+						   `• API Endpoint: https://api.openai.com/v1/chat/completions\n` +
+						   `• Model: gpt-4o\n` +
+						   `• Configuration: ${process.env.OPENAI_API_KEY ? 'Environment Variable' : 'VS Code Settings'}`;
+		}
+
+		const selection = await vscode.window.showInformationMessage(
+			statusMessage,
+			'Change Provider',
+			'Reconfigure'
+		);
+
+		if (selection === 'Change Provider') {
+			vscode.commands.executeCommand('sarif-ai-fixer.configureAiApi');
+		} else if (selection === 'Reconfigure') {
+			if (apiConfig.apiType === 'azure') {
+				vscode.commands.executeCommand('sarif-ai-fixer.configureAzureApi');
+			} else {
+				vscode.commands.executeCommand('sarif-ai-fixer.configureApiKey');
+			}
+		}
 	});
 
 	// Command to show SARIF warning details (can be triggered from gutter or context menu)
@@ -151,7 +237,14 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 
-	context.subscriptions.push(analyzeSarifCommand, configureApiKeyCommand, configureAzureApiCommand, showWarningDetailsCommand);
+	context.subscriptions.push(
+		analyzeSarifCommand, 
+		configureAiApiCommand,           // New unified command
+		showApiStatusCommand,            // Show current API status
+		legacyConfigureApiKeyCommand,    // Legacy OpenAI command (backward compatibility)
+		configureAzureApiCommand,        // Legacy Azure command (backward compatibility)
+		showWarningDetailsCommand
+	);
 }
 
 // Global variables to store decorations and panel references
