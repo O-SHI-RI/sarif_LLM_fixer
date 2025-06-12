@@ -21,15 +21,20 @@ A sophisticated VS Code extension that analyzes SARIF files for MISRA-C violatio
 
 ### Option 1: OpenAI API
 1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run: `SARIF AI Fixer: Configure OpenAI API Key`
+2. Run: `SARIF AI Fixer: Configure AI API` and select "OpenAI"
 3. Enter your OpenAI API key
+4. Choose endpoint type:
+   - **Standard OpenAI**: Use official OpenAI API endpoint
+   - **Custom Endpoint**: Use corporate proxy or custom OpenAI-compatible endpoint
 
 ### Option 2: Azure OpenAI API
 1. Open Command Palette (`Ctrl+Shift+P`)
-2. Run: `SARIF AI Fixer: Configure Azure OpenAI`
+2. Run: `SARIF AI Fixer: Configure AI API` and select "Azure OpenAI"
 3. Enter the following information:
    - **API Key**: Your Azure OpenAI API key
-   - **Endpoint**: Your Azure OpenAI endpoint (e.g., `https://your-resource.openai.azure.com`)
+   - **Endpoint**: Your Azure OpenAI endpoint (supports corporate proxies)
+     - Standard: `https://your-resource.openai.azure.com`
+     - Corporate: `https://your-company-proxy.com`
    - **Deployment Name**: Your model deployment name (e.g., `gpt-4`)
    - **API Version**: API version (default: `2024-02-15-preview`)
 
@@ -47,6 +52,32 @@ export AZURE_OPENAI_API_KEY="your-azure-api-key"
 export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
 export AZURE_OPENAI_DEPLOYMENT="your-deployment-name"
 export AZURE_OPENAI_API_VERSION="2024-02-15-preview"
+```
+
+### Corporate/Proxy Network Support
+
+The extension supports corporate environments with custom endpoints and proxy configurations:
+
+**OpenAI Custom Endpoints:**
+- OpenAI-compatible APIs behind corporate proxies
+- Custom domains with OpenAI API format
+- Requires HTTPS endpoints ending with `/chat/completions`
+
+**Azure OpenAI Corporate Support:**
+- Works with Azure OpenAI through corporate proxies
+- Flexible endpoint validation for company domains
+- Supports custom subdomains and proxy configurations
+
+**Example Corporate Configurations:**
+```bash
+# OpenAI through corporate proxy
+export OPENAI_API_KEY="your-key"
+# Configure custom endpoint via VS Code interface
+
+# Azure OpenAI through corporate proxy  
+export AZURE_OPENAI_API_KEY="your-azure-key"
+export AZURE_OPENAI_ENDPOINT="https://your-company-proxy.corp.com"
+export AZURE_OPENAI_DEPLOYMENT="gpt-4"
 ```
 
 ## Extension Settings

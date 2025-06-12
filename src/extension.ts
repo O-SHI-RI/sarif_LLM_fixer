@@ -93,11 +93,60 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		});
 
-		if (apiKey) {
-			await context.globalState.update('openai-api-key', apiKey);
-			await context.globalState.update('api-type', 'openai');
-			vscode.window.showInformationMessage('✅ OpenAI API configured successfully!');
+		if (!apiKey) return;
+
+		// Ask if user wants to configure custom endpoint (for corporate/proxy environments)
+		const useCustomEndpoint = await vscode.window.showQuickPick([
+			{
+				label: '$(cloud) Standard OpenAI',
+				detail: 'Use standard OpenAI API endpoint (api.openai.com)',
+				value: false
+			},
+			{
+				label: '$(gear) Custom Endpoint',
+				detail: 'Use custom/corporate OpenAI-compatible endpoint',
+				value: true
+			}
+		], {
+			placeHolder: 'Choose OpenAI endpoint configuration',
+			title: 'OpenAI API Configuration'
+		});
+
+		if (!useCustomEndpoint) return;
+
+		let customApiUrl = undefined;
+		if (useCustomEndpoint.value) {
+			customApiUrl = await vscode.window.showInputBox({
+				prompt: 'Enter your custom OpenAI endpoint (e.g., https://your-company-proxy.com/v1/chat/completions)',
+				placeHolder: 'https://your-proxy.company.com/v1/chat/completions',
+				validateInput: (value) => {
+					if (!value || value.trim().length === 0) {
+						return 'Custom endpoint cannot be empty';
+					}
+					if (!value.startsWith('https://')) {
+						return 'Endpoint must start with https:// for security';
+					}
+					if (!value.includes('/chat/completions')) {
+						return 'Endpoint should end with /chat/completions for OpenAI compatibility';
+					}
+					return null;
+				}
+			});
+
+			if (!customApiUrl) return;
 		}
+
+		// Save configuration
+		await context.globalState.update('openai-api-key', apiKey);
+		await context.globalState.update('api-type', 'openai');
+		if (customApiUrl) {
+			await context.globalState.update('openai-custom-url', customApiUrl);
+		} else {
+			await context.globalState.update('openai-custom-url', undefined);
+		}
+
+		const endpointType = customApiUrl ? 'custom endpoint' : 'standard OpenAI';
+		vscode.window.showInformationMessage(`✅ OpenAI API configured successfully with ${endpointType}!`);
 	}
 
 	async function configureAzureOpenAiApi(context: vscode.ExtensionContext) {
@@ -115,14 +164,16 @@ export function activate(context: vscode.ExtensionContext) {
 		if (!apiKey) return;
 
 		const apiUrl = await vscode.window.showInputBox({
-			prompt: 'Enter your Azure OpenAI endpoint (e.g., https://your-resource.openai.azure.com)',
+			prompt: 'Enter your Azure OpenAI endpoint',
+			placeHolder: 'https://your-resource.openai.azure.com or https://your-company-proxy.com',
 			validateInput: (value) => {
 				if (!value || value.trim().length === 0) {
 					return 'API endpoint cannot be empty';
 				}
 				if (!value.startsWith('https://')) {
-					return 'API endpoint must start with https://';
+					return 'API endpoint must start with https:// for security';
 				}
+				// Allow any HTTPS URL for corporate flexibility
 				return null;
 			}
 		});
@@ -180,8 +231,11 @@ export function activate(context: vscode.ExtensionContext) {
 						   `• API Version: ${apiConfig.apiVersion}\n` +
 						   `• Configuration: ${process.env.AZURE_OPENAI_API_KEY ? 'Environment Variable' : 'VS Code Settings'}`;
 		} else {
+			const endpoint = apiConfig.apiUrl || 'https://api.openai.com/v1/chat/completions';
+			const endpointType = apiConfig.apiUrl ? 'Custom Endpoint' : 'Standard OpenAI';
 			statusMessage = `✅ **OpenAI** configured\n\n` +
-						   `• API Endpoint: https://api.openai.com/v1/chat/completions\n` +
+						   `• API Endpoint: ${endpoint}\n` +
+						   `• Endpoint Type: ${endpointType}\n` +
 						   `• Model: gpt-4o\n` +
 						   `• Configuration: ${process.env.OPENAI_API_KEY ? 'Environment Variable' : 'VS Code Settings'}`;
 		}
@@ -453,10 +507,12 @@ async function buildApiConfig(context: vscode.ExtensionContext): Promise<AiApiCo
 		}
 	} else if (apiType === 'openai' || !apiType) {
 		const apiKey = context.globalState.get<string>('openai-api-key');
+		const customUrl = context.globalState.get<string>('openai-custom-url');
 		if (apiKey) {
 			return {
 				apiType: 'openai',
-				apiKey
+				apiKey,
+				apiUrl: customUrl // Will use default if undefined
 			};
 		}
 	}
