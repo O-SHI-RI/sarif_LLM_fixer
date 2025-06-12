@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SarifParser } from './sarifParser';
 import { MisraRuleIdentifier } from './misraRuleIdentifier';
-import { AiFixGenerator } from './aiFixGenerator';
+import { AiFixGenerator, AiApiConfig } from './aiFixGenerator';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -55,8 +55,66 @@ export function activate(context: vscode.ExtensionContext) {
 
 		if (apiKey) {
 			await context.globalState.update('openai-api-key', apiKey);
+			await context.globalState.update('api-type', 'openai');
 			vscode.window.showInformationMessage('OpenAI API key configured successfully!');
 		}
+	});
+
+	// Command to configure Azure OpenAI
+	const configureAzureApiCommand = vscode.commands.registerCommand('sarif-ai-fixer.configureAzureApi', async () => {
+		const apiKey = await vscode.window.showInputBox({
+			prompt: 'Enter your Azure OpenAI API key',
+			password: true,
+			validateInput: (value) => {
+				if (!value || value.trim().length === 0) {
+					return 'API key cannot be empty';
+				}
+				return null;
+			}
+		});
+
+		if (!apiKey) return;
+
+		const apiUrl = await vscode.window.showInputBox({
+			prompt: 'Enter your Azure OpenAI endpoint (e.g., https://your-resource.openai.azure.com)',
+			validateInput: (value) => {
+				if (!value || value.trim().length === 0) {
+					return 'API endpoint cannot be empty';
+				}
+				if (!value.startsWith('https://')) {
+					return 'API endpoint must start with https://';
+				}
+				return null;
+			}
+		});
+
+		if (!apiUrl) return;
+
+		const deploymentName = await vscode.window.showInputBox({
+			prompt: 'Enter your Azure OpenAI deployment name (e.g., gpt-4)',
+			validateInput: (value) => {
+				if (!value || value.trim().length === 0) {
+					return 'Deployment name cannot be empty';
+				}
+				return null;
+			}
+		});
+
+		if (!deploymentName) return;
+
+		const apiVersion = await vscode.window.showInputBox({
+			prompt: 'Enter API version (default: 2024-02-15-preview)',
+			value: '2024-02-15-preview'
+		});
+
+		// Save all Azure OpenAI configuration
+		await context.globalState.update('api-type', 'azure');
+		await context.globalState.update('azure-api-key', apiKey);
+		await context.globalState.update('azure-api-url', apiUrl);
+		await context.globalState.update('azure-deployment-name', deploymentName);
+		await context.globalState.update('azure-api-version', apiVersion || '2024-02-15-preview');
+
+		vscode.window.showInformationMessage('Azure OpenAI API configured successfully!');
 	});
 
 	// Command to show SARIF warning details (can be triggered from gutter or context menu)
@@ -93,7 +151,7 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 
-	context.subscriptions.push(analyzeSarifCommand, configureApiKeyCommand, showWarningDetailsCommand);
+	context.subscriptions.push(analyzeSarifCommand, configureApiKeyCommand, configureAzureApiCommand, showWarningDetailsCommand);
 }
 
 // Global variables to store decorations and panel references
@@ -261,6 +319,56 @@ function determineWindowLayout() {
 	
 	console.log('Determined layout:', layout);
 	return layout;
+}
+
+async function buildApiConfig(context: vscode.ExtensionContext): Promise<AiApiConfig | null> {
+	// Check for environment variables first (for development/CI)
+	if (process.env.OPENAI_API_KEY) {
+		return {
+			apiType: 'openai',
+			apiKey: process.env.OPENAI_API_KEY
+		};
+	}
+
+	if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_DEPLOYMENT) {
+		return {
+			apiType: 'azure',
+			apiKey: process.env.AZURE_OPENAI_API_KEY,
+			apiUrl: process.env.AZURE_OPENAI_ENDPOINT,
+			deploymentName: process.env.AZURE_OPENAI_DEPLOYMENT,
+			apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview'
+		};
+	}
+
+	// Check stored configuration
+	const apiType = context.globalState.get<string>('api-type');
+	
+	if (apiType === 'azure') {
+		const apiKey = context.globalState.get<string>('azure-api-key');
+		const apiUrl = context.globalState.get<string>('azure-api-url');
+		const deploymentName = context.globalState.get<string>('azure-deployment-name');
+		const apiVersion = context.globalState.get<string>('azure-api-version');
+
+		if (apiKey && apiUrl && deploymentName) {
+			return {
+				apiType: 'azure',
+				apiKey,
+				apiUrl,
+				deploymentName,
+				apiVersion: apiVersion || '2024-02-15-preview'
+			};
+		}
+	} else if (apiType === 'openai' || !apiType) {
+		const apiKey = context.globalState.get<string>('openai-api-key');
+		if (apiKey) {
+			return {
+				apiType: 'openai',
+				apiKey
+			};
+		}
+	}
+
+	return null;
 }
 
 // Helper function to create SVG icon for different severity levels
@@ -702,11 +810,11 @@ async function handleShowDetailsInSeparateWindow(data: any, listPanel: vscode.We
 }
 
 async function handleGenerateFix(data: any, context: vscode.ExtensionContext, panel: vscode.WebviewPanel) {
-	// Check for API key in environment variable first, then fallback to stored config
-	let apiKey = process.env.OPENAI_API_KEY || context.globalState.get<string>('openai-api-key');
+	// Build API configuration based on stored settings
+	const apiConfig = await buildApiConfig(context);
 	
-	if (!apiKey) {
-		vscode.window.showErrorMessage('OpenAI API key not found. Please set OPENAI_API_KEY environment variable or run "Configure OpenAI API Key" command.');
+	if (!apiConfig) {
+		vscode.window.showErrorMessage('No AI API configuration found. Please configure either OpenAI or Azure OpenAI API settings.');
 		return;
 	}
 
@@ -762,7 +870,7 @@ async function handleGenerateFix(data: any, context: vscode.ExtensionContext, pa
 			}
 		}
 
-		const aiFixGenerator = new AiFixGenerator(apiKey);
+		const aiFixGenerator = new AiFixGenerator(apiConfig);
 		const fix = await aiFixGenerator.generateFix(violatedCode, actualViolationData.sarifResult, actualViolationData.misraRule);
 		
 		// Send the fix back to the webview

@@ -9,12 +9,19 @@ export interface AiFixSuggestion {
     ruleId: string;
 }
 
-export class AiFixGenerator {
-    private apiKey: string;
-    private apiUrl: string = 'https://api.openai.com/v1/chat/completions';
+export interface AiApiConfig {
+    apiKey: string;
+    apiType: 'openai' | 'azure';
+    apiUrl?: string;
+    apiVersion?: string;
+    deploymentName?: string;
+}
 
-    constructor(apiKey: string) {
-        this.apiKey = apiKey;
+export class AiFixGenerator {
+    private config: AiApiConfig;
+
+    constructor(config: AiApiConfig) {
+        this.config = config;
     }
 
     public async generateFix(
@@ -37,34 +44,18 @@ export class AiFixGenerator {
         // Add a small delay before each request to avoid rate limiting
         await this.sleep(2000); // 2 second delay
         
-        const requestPayload = {
-            model: 'gpt-4o',
-            messages: [
-                {
-                    role: 'system',
-                    content: 'You are an expert C programmer who specializes in MISRA-C compliance. Your task is to analyze code violations and provide specific, compliant fixes.'
-                },
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            max_tokens: 1000,
-            temperature: 0.1
-        };
+        const { apiUrl, headers, requestPayload } = this.buildApiRequest(prompt);
 
-        console.log('=== OpenAI API Request ===');
-        console.log('URL:', this.apiUrl);
+        console.log('=== AI API Request ===');
+        console.log('API Type:', this.config.apiType);
+        console.log('URL:', apiUrl);
         console.log('Request payload:', JSON.stringify(requestPayload, null, 2));
-        console.log('API Key present:', !!this.apiKey);
-        console.log('API Key length:', this.apiKey?.length || 0);
+        console.log('API Key present:', !!this.config.apiKey);
+        console.log('API Key length:', this.config.apiKey?.length || 0);
         
         try {
-            const response = await axios.post(this.apiUrl, requestPayload, {
-                headers: {
-                    'Authorization': `Bearer ${this.apiKey}`,
-                    'Content-Type': 'application/json'
-                },
+            const response = await axios.post(apiUrl, requestPayload, {
+                headers,
                 timeout: 60000 // 60 second timeout
             });
 
@@ -108,6 +99,54 @@ export class AiFixGenerator {
 
     private sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    private buildApiRequest(prompt: string): { apiUrl: string, headers: any, requestPayload: any } {
+        const messages = [
+            {
+                role: 'system',
+                content: 'You are an expert C programmer who specializes in MISRA-C compliance. Your task is to analyze code violations and provide specific, compliant fixes.'
+            },
+            {
+                role: 'user',
+                content: prompt
+            }
+        ];
+
+        if (this.config.apiType === 'azure') {
+            // Azure OpenAI API format
+            const apiUrl = `${this.config.apiUrl}/openai/deployments/${this.config.deploymentName}/chat/completions?api-version=${this.config.apiVersion || '2024-02-15-preview'}`;
+            
+            const headers = {
+                'api-key': this.config.apiKey,
+                'Content-Type': 'application/json'
+            };
+
+            const requestPayload = {
+                messages,
+                max_tokens: 1000,
+                temperature: 0.1
+            };
+
+            return { apiUrl, headers, requestPayload };
+        } else {
+            // OpenAI API format
+            const apiUrl = this.config.apiUrl || 'https://api.openai.com/v1/chat/completions';
+            
+            const headers = {
+                'Authorization': `Bearer ${this.config.apiKey}`,
+                'Content-Type': 'application/json'
+            };
+
+            const requestPayload = {
+                model: 'gpt-4o',
+                messages,
+                max_tokens: 1000,
+                temperature: 0.1
+            };
+
+            return { apiUrl, headers, requestPayload };
+        }
     }
 
     private createPrompt(violatedCode: string, sarifResult: SarifResult, misraRule: MisraRule): string {

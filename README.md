@@ -1,20 +1,53 @@
-# sarif-ai-fixer README
+# SARIF AI Fixer
 
-This is the README for your extension "sarif-ai-fixer". After writing up a brief description, we recommend including the following sections.
+A sophisticated VS Code extension that analyzes SARIF files for MISRA-C violations and provides AI-powered fixes using OpenAI or Azure OpenAI.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **Visual Gutter Icons**: Professional breakpoint-style warning indicators in the gutter
+- **Three-Panel Layout**: Intelligent window management with source, warning list, and detail views
+- **Interactive Click-to-Detail**: Click gutter icons or highlighted code to view violation details
+- **AI-Powered Fixes**: Generate MISRA-C compliant code fixes using AI
+- **Dual API Support**: Works with both OpenAI and Azure OpenAI APIs
+- **Compact CLI Interface**: Terminal-style warning list with severity color coding
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- VS Code 1.100.0 or higher
+- Either OpenAI API access OR Azure OpenAI service deployment
+- SARIF files with MISRA-C violations for analysis
+
+## API Configuration
+
+### Option 1: OpenAI API
+1. Open Command Palette (`Ctrl+Shift+P`)
+2. Run: `SARIF AI Fixer: Configure OpenAI API Key`
+3. Enter your OpenAI API key
+
+### Option 2: Azure OpenAI API
+1. Open Command Palette (`Ctrl+Shift+P`)
+2. Run: `SARIF AI Fixer: Configure Azure OpenAI`
+3. Enter the following information:
+   - **API Key**: Your Azure OpenAI API key
+   - **Endpoint**: Your Azure OpenAI endpoint (e.g., `https://your-resource.openai.azure.com`)
+   - **Deployment Name**: Your model deployment name (e.g., `gpt-4`)
+   - **API Version**: API version (default: `2024-02-15-preview`)
+
+### Environment Variable Configuration (Optional)
+You can also configure via environment variables:
+
+**For OpenAI:**
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+```
+
+**For Azure OpenAI:**
+```bash
+export AZURE_OPENAI_API_KEY="your-azure-api-key"
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
+export AZURE_OPENAI_DEPLOYMENT="your-deployment-name"
+export AZURE_OPENAI_API_VERSION="2024-02-15-preview"
+```
 
 ## Extension Settings
 
