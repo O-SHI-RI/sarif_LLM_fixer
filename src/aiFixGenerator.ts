@@ -130,9 +130,15 @@ MISRA-C Remediation Guidance: ${misraRule.remediation}
 
 Please provide:
 1. ONLY fix the specific line(s) that violate the rule - do not include headers, function declarations, or complete programs
-2. Keep the fix minimal and focused on the violation
-3. Maintain the original code structure and context
-4. Provide a clear explanation of what was changed and why
+2. Provide a WORKING, COMPLIANT fix that resolves the MISRA violation
+3. Keep the fix minimal and focused on the violation
+4. Maintain the original code structure and context
+5. If the violation cannot be fixed with a simple replacement, provide the best possible compliant alternative
+
+Requirements for this specific rule:
+- Rule 11.3: Avoid casting between different pointer types. Use proper type declarations or intermediate variables instead.
+- Rule 10.1: Ensure operands have appropriate types. Cast one operand to match the other's signedness.
+- Rule 21.6: Replace unsafe functions like sprintf with safer alternatives like snprintf.
 
 Format your response as:
 FIXED_CODE:
@@ -141,7 +147,7 @@ FIXED_CODE:
 \`\`\`
 
 EXPLANATION:
-[explanation of the changes made]
+[explanation of the changes made and why this resolves the MISRA violation]
 `;
     }
 

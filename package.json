@@ -33,6 +33,10 @@
         {
           "command": "sarif-ai-fixer.configureApiKey",
           "title": "SARIF AI Fixer: Configure OpenAI API Key"
+        },
+        {
+          "command": "sarif-ai-fixer.showWarningDetails",
+          "title": "SARIF AI Fixer: Show Warning Details"
         }
       ]
     }
