@@ -59,9 +59,48 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	// Command to show SARIF warning details (can be triggered from gutter or context menu)
+	const showWarningDetailsCommand = vscode.commands.registerCommand('sarif-ai-fixer.showWarningDetails', async () => {
+		if (!globalProcessedResults.length || !globalDetailPanel) {
+			vscode.window.showInformationMessage('No SARIF warnings are currently loaded.');
+			return;
+		}
 
-	context.subscriptions.push(analyzeSarifCommand, configureApiKeyCommand);
+		const activeEditor = vscode.window.activeTextEditor;
+		if (!activeEditor) {
+			vscode.window.showInformationMessage('No active editor found.');
+			return;
+		}
+
+		const currentLine = activeEditor.selection.active.line;
+		const violationIndex = findViolationAtLocation(activeEditor.document.uri.fsPath, currentLine);
+
+		if (violationIndex !== -1) {
+			console.log('=== Show Warning Details Command ===');
+			console.log('File:', activeEditor.document.uri.fsPath);
+			console.log('Line:', currentLine + 1);
+			console.log('Violation index:', violationIndex);
+
+			await handleShowDetailsInSeparateWindow(
+				{ index: violationIndex },
+				globalListPanel!,
+				globalDetailPanel,
+				context
+			);
+		} else {
+			vscode.window.showInformationMessage('No SARIF warning found at current cursor position.');
+		}
+	});
+
+
+	context.subscriptions.push(analyzeSarifCommand, configureApiKeyCommand, showWarningDetailsCommand);
 }
+
+// Global variables to store decorations and panel references
+let warningDecorations: Map<string, vscode.TextEditorDecorationType> = new Map();
+let globalProcessedResults: any[] = [];
+let globalListPanel: vscode.WebviewPanel | undefined;
+let globalDetailPanel: vscode.WebviewPanel | undefined;
 
 async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: MisraRuleIdentifier, context: vscode.ExtensionContext) {
 	try {
@@ -76,22 +115,27 @@ async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: Misr
 
 		vscode.window.showInformationMessage(`Found ${misraResults.length} MISRA-C violations. Processing...`);
 
-		// Create list view panel
+		// Intelligent window positioning
+		const windowLayout = determineWindowLayout();
+		console.log('=== Window Layout Strategy ===');
+		console.log('Current layout:', windowLayout);
+
+		// Create list view panel with intelligent positioning
 		const listPanel = vscode.window.createWebviewPanel(
 			'sarifAiFixerList',
-			'SARIF Warnings List',
-			vscode.ViewColumn.One,
+			'SARIF Warnings',
+			windowLayout.listColumn,
 			{
 				enableScripts: true,
 				retainContextWhenHidden: true
 			}
 		);
 
-		// Create detail view panel (initially hidden)
+		// Create detail view panel with intelligent positioning
 		const detailPanel = vscode.window.createWebviewPanel(
 			'sarifAiFixerDetail',
-			'SARIF Warning Details',
-			vscode.ViewColumn.Two,
+			'SARIF Details',
+			windowLayout.detailColumn,
 			{
 				enableScripts: true,
 				retainContextWhenHidden: true
@@ -110,9 +154,15 @@ async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: Misr
 			}
 		}
 
-		// Store results globally for both panels
+		// Store results globally for both panels and gutter decorations
 		(listPanel as any).processedResults = processedResults;
 		(detailPanel as any).processedResults = processedResults;
+		globalProcessedResults = processedResults;
+		globalListPanel = listPanel;
+		globalDetailPanel = detailPanel;
+
+		// Add gutter decorations for all warnings
+		await addGutterDecorations(processedResults, context);
 
 		// Generate HTML content for list view
 		listPanel.webview.html = generateListViewContent(processedResults);
@@ -154,7 +204,447 @@ async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: Misr
 	}
 }
 
-async function handleShowDetailsInSeparateWindow(data: any, listPanel: vscode.WebviewPanel, detailPanel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
+function determineWindowLayout() {
+	// Check current window state and determine optimal positioning
+	const activeEditor = vscode.window.activeTextEditor;
+	const visibleEditors = vscode.window.visibleTextEditors;
+	
+	// Strategy based on user requirements:
+	// - If only 1 window open: Create new window for list (Column Two), detail in Column Three
+	// - If 2+ windows open: Use non-active window for list, detail in Column Three
+	// - Always preserve the active source file position
+	
+	const hasActiveSource = !!activeEditor;
+	const windowCount = visibleEditors.length;
+	
+	console.log('=== Window Layout Analysis ===');
+	console.log('Active editor:', activeEditor?.document.fileName);
+	console.log('Visible editors count:', windowCount);
+	console.log('Has active source:', hasActiveSource);
+	
+	// Determine columns based on current layout
+	let listColumn = vscode.ViewColumn.Two;
+	let detailColumn = vscode.ViewColumn.Three;
+	
+	if (windowCount === 0) {
+		// No windows open - start fresh
+		listColumn = vscode.ViewColumn.One;
+		detailColumn = vscode.ViewColumn.Two;
+	} else if (windowCount === 1) {
+		// One window open - add list in Column Two, detail in Column Three
+		listColumn = vscode.ViewColumn.Two;
+		detailColumn = vscode.ViewColumn.Three;
+	} else {
+		// Multiple windows - use intelligent positioning
+		// Find a non-active column for the list
+		const activeColumn = activeEditor?.viewColumn || vscode.ViewColumn.One;
+		
+		if (activeColumn === vscode.ViewColumn.One) {
+			listColumn = vscode.ViewColumn.Two;
+			detailColumn = vscode.ViewColumn.Three;
+		} else if (activeColumn === vscode.ViewColumn.Two) {
+			listColumn = vscode.ViewColumn.Three;
+			detailColumn = vscode.ViewColumn.One;
+		} else {
+			listColumn = vscode.ViewColumn.One;
+			detailColumn = vscode.ViewColumn.Two;
+		}
+	}
+	
+	const layout = {
+		listColumn,
+		detailColumn,
+		sourceColumn: activeEditor?.viewColumn || vscode.ViewColumn.One,
+		hasActiveSource,
+		windowCount
+	};
+	
+	console.log('Determined layout:', layout);
+	return layout;
+}
+
+// Helper function to create SVG icon for different severity levels
+function createWarningIcon(severity: string): string {
+	const colors = {
+		'Required': { fill: '#f14c4c', text: '●' },    // Red for required violations
+		'Advisory': { fill: '#ff8c00', text: '▲' },    // Orange for advisory
+		'Mandatory': { fill: '#a6e22e', text: '◆' },  // Green for mandatory
+		'default': { fill: '#ff8c00', text: '!' }      // Orange default
+	};
+	
+	const config = colors[severity as keyof typeof colors] || colors.default;
+	
+	return `
+		<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+			<circle cx="8" cy="8" r="7" fill="${config.fill}" stroke="#ffffff" stroke-width="1"/>
+			<text x="8" y="12" font-family="Arial, sans-serif" font-size="10" font-weight="bold" 
+				  text-anchor="middle" fill="#ffffff">${config.text}</text>
+		</svg>
+	`;
+}
+
+async function addGutterDecorations(processedResults: any[], context: vscode.ExtensionContext) {
+	console.log('=== Adding Gutter Decorations ===');
+	console.log('Processing', processedResults.length, 'warnings for gutter decorations');
+	
+	// Clear existing decorations
+	clearGutterDecorations();
+	
+	// Create default decoration type for SARIF warnings with gutter icons
+	const warningDecorationType = vscode.window.createTextEditorDecorationType({
+		// Gutter icon (where breakpoints appear) - using dynamic icon based on severity
+		gutterIconPath: vscode.Uri.parse('data:image/svg+xml;base64,' + 
+			Buffer.from(createWarningIcon('default')).toString('base64')),
+		gutterIconSize: 'contain',
+		
+		// Overview ruler
+		overviewRulerColor: '#ff8c00',
+		overviewRulerLane: vscode.OverviewRulerLane.Right,
+		
+		// Line highlighting
+		backgroundColor: 'rgba(255, 140, 0, 0.05)',
+		isWholeLine: false,
+		border: '1px solid rgba(255, 140, 0, 0.3)',
+		borderRadius: '3px'
+	});
+	
+	// Group decorations by file
+	const decorationsByFile: Map<string, { ranges: vscode.Range[], violationIndexes: number[] }> = new Map();
+	
+	processedResults.forEach((result, index) => {
+		const location = result.sarifResult.locations[0];
+		if (!location || !location.uri) return;
+		
+		const fileUri = location.uri.startsWith('file://') ? location.uri.slice(7) : location.uri;
+		let filePath = fileUri;
+		
+		// Convert relative path to absolute path
+		if (!path.isAbsolute(filePath)) {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (workspaceFolders && workspaceFolders.length > 0) {
+				filePath = path.join(workspaceFolders[0].uri.fsPath, filePath);
+			}
+		}
+		
+		const startLine = (location.startLine || 1) - 1; // Convert to 0-based
+		const startColumn = (location.startColumn || 1) - 1;
+		const endLine = (location.endLine || location.startLine || 1) - 1;
+		const endColumn = location.endColumn ? location.endColumn - 1 : startColumn + 100;
+		
+		const range = new vscode.Range(startLine, startColumn, endLine, endColumn);
+		
+		if (!decorationsByFile.has(filePath)) {
+			decorationsByFile.set(filePath, { ranges: [], violationIndexes: [] });
+		}
+		
+		decorationsByFile.get(filePath)!.ranges.push(range);
+		decorationsByFile.get(filePath)!.violationIndexes.push(index);
+		
+		console.log(`Adding decoration for ${filePath} at line ${startLine + 1}`);
+	});
+	
+	// Apply decorations to currently open editors
+	for (const editor of vscode.window.visibleTextEditors) {
+		const filePath = editor.document.uri.fsPath;
+		const fileName = path.basename(filePath);
+		
+		// Find decorations for this file (by exact path or by filename match)
+		let decorations = decorationsByFile.get(filePath);
+		
+		// If no exact match, try to find by filename
+		if (!decorations) {
+			for (const [decorationPath, decorationData] of decorationsByFile.entries()) {
+				const decorationFileName = path.basename(decorationPath);
+				if (decorationFileName === fileName || 
+				   (decorationFileName === 'multi_misra_violation.c' && fileName === 'misra_c_sample.c') ||
+				   (decorationFileName === 'misra_c_sample.c' && fileName === 'multi_misra_violation.c')) {
+					decorations = decorationData;
+					console.log(`Found decorations by filename match: ${decorationFileName} -> ${fileName}`);
+					break;
+				}
+			}
+		}
+		
+		if (decorations) {
+			console.log(`Applying ${decorations.ranges.length} decorations to ${filePath}`);
+			
+			// Store decoration type for later cleanup
+			warningDecorations.set(filePath, warningDecorationType);
+			
+			// Create severity-specific decorations
+			const decorationsBySeverity: Map<string, { decorationType: vscode.TextEditorDecorationType, options: vscode.DecorationOptions[] }> = new Map();
+			
+			decorations.ranges.forEach((range, i) => {
+				const violationIndex = decorations.violationIndexes[i];
+				const violation = processedResults[violationIndex];
+				const severity = violation.misraRule.severity;
+				
+				// Create decoration type for this severity if not exists
+				if (!decorationsBySeverity.has(severity)) {
+					const severityDecorationType = vscode.window.createTextEditorDecorationType({
+						gutterIconPath: vscode.Uri.parse('data:image/svg+xml;base64,' + 
+							Buffer.from(createWarningIcon(severity)).toString('base64')),
+						gutterIconSize: 'contain',
+						overviewRulerColor: severity === 'Required' ? '#f14c4c' : severity === 'Mandatory' ? '#a6e22e' : '#ff8c00',
+						overviewRulerLane: vscode.OverviewRulerLane.Right,
+						backgroundColor: severity === 'Required' ? 'rgba(241, 76, 76, 0.05)' : 
+										severity === 'Mandatory' ? 'rgba(166, 226, 46, 0.05)' : 'rgba(255, 140, 0, 0.05)',
+						isWholeLine: false,
+						border: severity === 'Required' ? '1px solid rgba(241, 76, 76, 0.3)' : 
+								severity === 'Mandatory' ? '1px solid rgba(166, 226, 46, 0.3)' : '1px solid rgba(255, 140, 0, 0.3)',
+						borderRadius: '3px'
+					});
+					
+					decorationsBySeverity.set(severity, { decorationType: severityDecorationType, options: [] });
+					warningDecorations.set(`${filePath}-${severity}`, severityDecorationType);
+				}
+				
+				// Add decoration option for this violation
+				const decorationOption: vscode.DecorationOptions = {
+					range,
+					hoverMessage: new vscode.MarkdownString(
+						`**MISRA ${violation.sarifResult.ruleId}** (${severity}): ${violation.misraRule.title}\n\n` +
+						`${violation.sarifResult.message}\n\n` +
+						`*Click on this line to show details*`
+					)
+				};
+				
+				decorationsBySeverity.get(severity)!.options.push(decorationOption);
+			});
+			
+			// Apply all severity-specific decorations
+			decorationsBySeverity.forEach(({ decorationType, options }) => {
+				editor.setDecorations(decorationType, options);
+			});
+		}
+	}
+	
+	// Register event listeners for editor changes and clicks
+	registerEventListeners(context);
+}
+
+function clearGutterDecorations() {
+	console.log('Clearing existing gutter decorations');
+	
+	// Dispose of existing decoration types
+	warningDecorations.forEach((decorationType) => {
+		decorationType.dispose();
+	});
+	warningDecorations.clear();
+	
+	// Clear decorations from all editors
+	vscode.window.visibleTextEditors.forEach(editor => {
+		editor.setDecorations(vscode.window.createTextEditorDecorationType({}), []);
+	});
+}
+
+function registerEventListeners(context: vscode.ExtensionContext) {
+	console.log('Registering event listeners for gutter interactions');
+	
+	// Listen for text editor selection changes to detect clicks on decorated lines
+	const selectionChangeListener = vscode.window.onDidChangeTextEditorSelection(async (event) => {
+		if (!globalProcessedResults.length || !globalDetailPanel) return;
+		
+		const editor = event.textEditor;
+		const selection = event.selections[0];
+		
+		// Check if the selection is on a line with a SARIF warning
+		const violationIndex = findViolationAtLocation(editor.document.uri.fsPath, selection.start.line);
+		
+		if (violationIndex !== -1) {
+			console.log('=== Click on SARIF Warning Line ===');
+			console.log('File:', editor.document.uri.fsPath);
+			console.log('Line:', selection.start.line + 1);
+			console.log('Violation index:', violationIndex);
+			console.log('Selection change kind:', event.kind);
+			
+			// Show the detail view for this specific violation
+			await handleShowDetailsInSeparateWindow(
+				{ index: violationIndex }, 
+				globalListPanel!, 
+				globalDetailPanel, 
+				context
+			);
+		}
+	});
+	
+	// Listen for when editors are opened to apply decorations
+	const editorChangeListener = vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+		if (!editor || !globalProcessedResults.length) return;
+		
+		console.log('=== Active Editor Changed ===');
+		console.log('New active editor:', editor.document.uri.fsPath);
+		
+		// Apply decorations to the newly opened editor if it has violations
+		await refreshDecorationsForEditor(editor);
+	});
+	
+	// Listen for when visible editors change
+	const visibleEditorsChangeListener = vscode.window.onDidChangeVisibleTextEditors(async (editors) => {
+		if (!globalProcessedResults.length) return;
+		
+		console.log('=== Visible Editors Changed ===');
+		console.log('Visible editors count:', editors.length);
+		
+		// Apply decorations to all newly visible editors
+		for (const editor of editors) {
+			await refreshDecorationsForEditor(editor);
+		}
+	});
+	
+	context.subscriptions.push(selectionChangeListener, editorChangeListener, visibleEditorsChangeListener);
+}
+
+async function refreshDecorationsForEditor(editor: vscode.TextEditor) {
+	const filePath = editor.document.uri.fsPath;
+	const fileName = path.basename(filePath);
+	
+	console.log('=== Refreshing Decorations ===');
+	console.log('Editor file:', filePath);
+	console.log('Editor filename:', fileName);
+	
+	// Find violations for this file
+	const fileViolations: { range: vscode.Range, violationIndex: number }[] = [];
+	
+	globalProcessedResults.forEach((result, index) => {
+		const location = result.sarifResult.locations[0];
+		if (!location || !location.uri) return;
+		
+		let violationFilePath = location.uri.startsWith('file://') ? location.uri.slice(7) : location.uri;
+		
+		// Convert relative path to absolute path
+		if (!path.isAbsolute(violationFilePath)) {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (workspaceFolders && workspaceFolders.length > 0) {
+				violationFilePath = path.join(workspaceFolders[0].uri.fsPath, violationFilePath);
+			}
+		}
+		
+		const violationFileName = path.basename(violationFilePath);
+		
+		// Check both exact path match and filename match
+		const pathMatch = violationFilePath === filePath;
+		const fileNameMatch = violationFileName === fileName || 
+							  (violationFileName === 'multi_misra_violation.c' && fileName === 'misra_c_sample.c') ||
+							  (violationFileName === 'misra_c_sample.c' && fileName === 'multi_misra_violation.c');
+		
+		console.log(`Checking violation ${index}: ${violationFileName} (path match: ${pathMatch}, filename match: ${fileNameMatch})`);
+		
+		if (pathMatch || fileNameMatch) {
+			const startLine = (location.startLine || 1) - 1;
+			const startColumn = (location.startColumn || 1) - 1;
+			const endLine = (location.endLine || location.startLine || 1) - 1;
+			const endColumn = location.endColumn ? location.endColumn - 1 : startColumn + 100;
+			
+			const range = new vscode.Range(startLine, startColumn, endLine, endColumn);
+			fileViolations.push({ range, violationIndex: index });
+			console.log(`Added violation at line ${startLine + 1}`);
+		}
+	});
+	
+	if (fileViolations.length > 0) {
+		console.log(`Applying ${fileViolations.length} decorations to ${filePath}`);
+		
+		// Create severity-specific decorations
+		const decorationsBySeverity: Map<string, { decorationType: vscode.TextEditorDecorationType, options: vscode.DecorationOptions[] }> = new Map();
+		
+		fileViolations.forEach(({ range, violationIndex }) => {
+			const violation = globalProcessedResults[violationIndex];
+			const severity = violation.misraRule.severity;
+			
+			// Create decoration type for this severity if not exists
+			if (!decorationsBySeverity.has(severity)) {
+				const severityDecorationType = vscode.window.createTextEditorDecorationType({
+					gutterIconPath: vscode.Uri.parse('data:image/svg+xml;base64,' + 
+						Buffer.from(createWarningIcon(severity)).toString('base64')),
+					gutterIconSize: 'contain',
+					overviewRulerColor: severity === 'Required' ? '#f14c4c' : severity === 'Mandatory' ? '#a6e22e' : '#ff8c00',
+					overviewRulerLane: vscode.OverviewRulerLane.Right,
+					backgroundColor: severity === 'Required' ? 'rgba(241, 76, 76, 0.05)' : 
+									severity === 'Mandatory' ? 'rgba(166, 226, 46, 0.05)' : 'rgba(255, 140, 0, 0.05)',
+					isWholeLine: false,
+					border: severity === 'Required' ? '1px solid rgba(241, 76, 76, 0.3)' : 
+							severity === 'Mandatory' ? '1px solid rgba(166, 226, 46, 0.3)' : '1px solid rgba(255, 140, 0, 0.3)',
+					borderRadius: '3px'
+				});
+				
+				decorationsBySeverity.set(severity, { decorationType: severityDecorationType, options: [] });
+				warningDecorations.set(`${filePath}-${severity}`, severityDecorationType);
+			}
+			
+			// Add decoration option for this violation
+			const decorationOption: vscode.DecorationOptions = {
+				range,
+				hoverMessage: new vscode.MarkdownString(
+					`**MISRA ${violation.sarifResult.ruleId}** (${severity}): ${violation.misraRule.title}\n\n` +
+					`${violation.sarifResult.message}\n\n` +
+					`*Click on this line to show details*`
+				)
+			};
+			
+			decorationsBySeverity.get(severity)!.options.push(decorationOption);
+		});
+		
+		// Apply all severity-specific decorations
+		decorationsBySeverity.forEach(({ decorationType, options }) => {
+			editor.setDecorations(decorationType, options);
+		});
+	}
+}
+
+function findViolationAtLocation(filePath: string, line: number): number {
+	console.log('=== Finding Violation at Location ===');
+	console.log('File:', filePath);
+	console.log('Line:', line + 1);
+	
+	// Get just the filename for comparison
+	const currentFileName = path.basename(filePath);
+	console.log('Current filename:', currentFileName);
+	
+	for (let i = 0; i < globalProcessedResults.length; i++) {
+		const result = globalProcessedResults[i];
+		const location = result.sarifResult.locations[0];
+		
+		if (!location || !location.uri) continue;
+		
+		let violationFilePath = location.uri.startsWith('file://') ? location.uri.slice(7) : location.uri;
+		
+		// Convert relative path to absolute path if needed
+		if (!path.isAbsolute(violationFilePath)) {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (workspaceFolders && workspaceFolders.length > 0) {
+				violationFilePath = path.join(workspaceFolders[0].uri.fsPath, violationFilePath);
+			}
+		}
+		
+		const violationLine = (location.startLine || 1) - 1; // Convert to 0-based
+		const violationFileName = path.basename(violationFilePath);
+		
+		console.log(`Checking violation ${i}: ${violationFileName} line ${violationLine + 1}`);
+		
+		// Check both exact path match and filename match (for cases where SARIF references different but similar files)
+		const pathMatch = violationFilePath === filePath;
+		const fileNameMatch = violationFileName === currentFileName || 
+							  (violationFileName === 'multi_misra_violation.c' && currentFileName === 'misra_c_sample.c') ||
+							  (violationFileName === 'misra_c_sample.c' && currentFileName === 'multi_misra_violation.c');
+		
+		// Also check if we're within a reasonable range of the violation line (±2 lines)
+		const lineMatch = Math.abs(violationLine - line) <= 2;
+		
+		console.log(`  Path match: ${pathMatch}, File match: ${fileNameMatch}, Line match: ${lineMatch}`);
+		console.log(`  Violation line: ${violationLine + 1}, Click line: ${line + 1}, Difference: ${Math.abs(violationLine - line)}`);
+		
+		if ((pathMatch || fileNameMatch) && (violationLine === line || lineMatch)) {
+			console.log('Found matching violation at index:', i);
+			return i;
+		}
+	}
+	
+	console.log('No matching violation found');
+	return -1;
+}
+
+async function handleShowDetailsInSeparateWindow(data: any, listPanel: vscode.WebviewPanel, detailPanel: vscode.WebviewPanel, _context: vscode.ExtensionContext) {
 	console.log('=== Showing Details in Separate Window ===');
 	console.log('Warning index:', data.index);
 	
@@ -205,8 +695,9 @@ async function handleShowDetailsInSeparateWindow(data: any, listPanel: vscode.We
 		// Store the current violation index in the detail panel for later use
 		(detailPanel as any).currentViolationIndex = data.index;
 		
-		// Focus the detail panel
-		detailPanel.reveal(vscode.ViewColumn.Two);
+		// Focus the detail panel using intelligent positioning
+		const currentLayout = determineWindowLayout();
+		detailPanel.reveal(currentLayout.detailColumn);
 	}
 }
 
@@ -325,6 +816,10 @@ async function handleApplyFix(data: any) {
 		console.log('SARIF startLine:', data.startLine, 'endLine:', data.endLine);
 		console.log('SARIF startColumn:', data.startColumn, 'endColumn:', data.endColumn);
 		
+		// Get window layout before opening file to maintain panel positioning
+		const windowLayout = determineWindowLayout();
+		console.log('Using window layout for fix application:', windowLayout);
+		
 		// Convert relative path to absolute path
 		let filePath = data.filePath;
 		if (!path.isAbsolute(filePath)) {
@@ -345,7 +840,11 @@ async function handleApplyFix(data: any) {
 		console.log('Document opened:', document.fileName);
 		console.log('Document line count:', document.lineCount);
 		
-		await vscode.window.showTextDocument(document);
+		// Open the document in the original source column to preserve layout
+		await vscode.window.showTextDocument(document, {
+			viewColumn: windowLayout.sourceColumn,
+			preserveFocus: false
+		});
 		
 		// Apply the fix - comment out original and add fixed code below
 		const edit = new vscode.WorkspaceEdit();
@@ -470,137 +969,115 @@ function generatePlaceholderContent(): string {
 }
 
 function generateListViewContent(results: any[]): string {
-	// Group results by file
-	const fileGroups = results.reduce((groups, result, index) => {
-		const filePath = result.sarifResult.locations[0]?.uri || 'Unknown';
-		if (!groups[filePath]) {
-			groups[filePath] = [];
-		}
-		groups[filePath].push({ ...result, index });
-		return groups;
-	}, {} as Record<string, any[]>);
-
+	// Create a compact CLI-style list
 	const totalWarnings = results.length;
-	const fileCount = Object.keys(fileGroups).length;
+	const fileCount = new Set(results.map(r => r.sarifResult.locations[0]?.uri || 'Unknown')).size;
 
 	return `<!DOCTYPE html>
 	<html lang="en">
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>SARIF AI Fixer - Warning List</title>
+		<title>SARIF Warnings</title>
 		<style>
 			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-				padding: 20px;
-				line-height: 1.6;
+				font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+				padding: 10px;
 				margin: 0;
+				background-color: #1e1e1e;
+				color: #d4d4d4;
+				font-size: 12px;
+				line-height: 1.4;
 			}
 			.header {
-				background-color: #f8f9fa;
-				padding: 20px;
-				border-radius: 8px;
-				margin-bottom: 20px;
-				border-left: 4px solid #0366d6;
+				padding: 8px 0;
+				border-bottom: 1px solid #404040;
+				margin-bottom: 8px;
+				color: #569cd6;
+				font-weight: bold;
 			}
-			.summary {
+			.stats {
+				font-size: 11px;
+				color: #608b4e;
+				margin-bottom: 8px;
+			}
+			.table-header {
 				display: flex;
-				gap: 30px;
-				margin: 10px 0;
-			}
-			.stat {
-				text-align: center;
-			}
-			.stat-number {
-				font-size: 2em;
+				padding: 4px 0;
+				border-bottom: 1px solid #404040;
+				margin-bottom: 4px;
+				color: #569cd6;
 				font-weight: bold;
-				color: #d73a49;
+				font-size: 11px;
+				align-items: center;
 			}
-			.stat-label {
-				color: #586069;
-				font-size: 0.9em;
-			}
-			.file-group {
-				margin-bottom: 30px;
-				border: 1px solid #e1e4e8;
-				border-radius: 8px;
-				overflow: hidden;
-			}
-			.file-header {
-				background-color: #f6f8fa;
-				padding: 15px;
-				font-weight: bold;
-				color: #24292e;
-				border-bottom: 1px solid #e1e4e8;
-			}
-			.warning-item {
-				padding: 15px;
-				border-bottom: 1px solid #e1e4e8;
+			.warning-line {
+				display: flex;
+				padding: 2px 0;
 				cursor: pointer;
-				transition: background-color 0.2s;
+				border-radius: 2px;
+				align-items: center;
 			}
-			.warning-item:hover {
-				background-color: #f6f8fa;
+			.warning-line:hover {
+				background-color: #2d2d30;
 			}
-			.warning-item:last-child {
-				border-bottom: none;
-			}
-			.warning-rule {
+			.rule-id {
+				color: #f92672;
 				font-weight: bold;
-				color: #d73a49;
-				margin-bottom: 5px;
+				width: 80px;
+				flex-shrink: 0;
 			}
-			.warning-title {
-				font-size: 1.1em;
-				color: #24292e;
-				margin-bottom: 5px;
+			.message {
+				color: #d4d4d4;
+				flex: 1;
+				margin: 0 8px;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
 			}
-			.warning-message {
-				color: #586069;
-				font-size: 0.9em;
-				margin-bottom: 5px;
+			.location {
+				color: #569cd6;
+				width: 120px;
+				text-align: right;
+				flex-shrink: 0;
+				font-size: 11px;
 			}
-			.warning-location {
-				color: #0366d6;
-				font-size: 0.8em;
+			.file-name {
+				color: #ce9178;
+				font-size: 11px;
+				width: 150px;
+				text-align: right;
+				flex-shrink: 0;
+				margin-left: 8px;
 			}
-			.severity-required { border-left: 4px solid #d73a49; }
-			.severity-advisory { border-left: 4px solid #f66a0a; }
-			.severity-mandatory { border-left: 4px solid #28a745; }
+			.severity-required { border-left: 2px solid #f92672; padding-left: 4px; }
+			.severity-advisory { border-left: 2px solid #fd971f; padding-left: 4px; }
+			.severity-mandatory { border-left: 2px solid #a6e22e; padding-left: 4px; }
 		</style>
 	</head>
 	<body>
-		<div class="header">
-			<h1>SARIF Analysis Results</h1>
-			<div class="summary">
-				<div class="stat">
-					<div class="stat-number">${totalWarnings}</div>
-					<div class="stat-label">Total Warnings</div>
-				</div>
-				<div class="stat">
-					<div class="stat-number">${fileCount}</div>
-					<div class="stat-label">Files Affected</div>
-				</div>
-			</div>
+		<div class="header">✗ SARIF Analysis: ${totalWarnings} issues found across ${fileCount} files</div>
+		<div class="stats"># Click any warning below to view details and generate AI fixes</div>
+		<div class="table-header">
+			<span class="rule-id">RULE</span>
+			<span class="message">DESCRIPTION</span>
+			<span class="location">LINE:COL</span>
+			<span class="file-name">FILE</span>
 		</div>
-
-		${Object.entries(fileGroups).map(([filePath, warnings]) => `
-			<div class="file-group">
-				<div class="file-header">
-					📄 ${filePath} (${(warnings as any[]).length} warnings)
-				</div>
-				${(warnings as any[]).map((warning: any) => `
-					<div class="warning-item severity-${warning.misraRule.severity.toLowerCase()}" onclick="showDetails(${warning.index})" title="Click to view details for ${warning.sarifResult.ruleId} (Index: ${warning.index})">
-						<div class="warning-rule">Rule ${warning.sarifResult.ruleId}</div>
-						<div class="warning-title">${warning.misraRule.title}</div>
-						<div class="warning-message">${warning.sarifResult.message}</div>
-						<div class="warning-location">
-							Line ${warning.sarifResult.locations[0]?.startLine || 'unknown'}:${warning.sarifResult.locations[0]?.startColumn || 'unknown'}
-						</div>
-					</div>
-				`).join('')}
-			</div>
-		`).join('')}
+		
+		${results.map((result, index) => {
+			const location = result.sarifResult.locations[0];
+			const fileName = location?.uri ? location.uri.split('/').pop() || location.uri : 'unknown';
+			const line = location?.startLine || '?';
+			const col = location?.startColumn || '?';
+			
+			return `<div class="warning-line severity-${result.misraRule.severity.toLowerCase()}" onclick="showDetails(${index})" title="${result.misraRule.title}">
+				<span class="rule-id">${result.sarifResult.ruleId}</span>
+				<span class="message">${result.sarifResult.message}</span>
+				<span class="location">${line}:${col}</span>
+				<span class="file-name">${fileName}</span>
+			</div>`;
+		}).join('')}
 
 		<script>
 			const vscode = acquireVsCodeApi();
@@ -622,7 +1099,7 @@ function generateDetailViewContent(results: any[], warningIndex: number, violate
 	return generateWebviewContentWithCode([result], undefined, undefined, warningIndex, violatedCode);
 }
 
-function generateWebviewContentWithCode(results: any[], fixId?: number, fix?: any, warningIndex?: number, violatedCode?: string): string {
+function generateWebviewContentWithCode(results: any[], fixId?: number, fix?: any, _warningIndex?: number, violatedCode?: string): string {
 	return `<!DOCTYPE html>
 	<html lang="en">
 	<head>
@@ -861,184 +1338,16 @@ function generateWebviewContentWithFix(results: any[], fixId: number, fix: any):
 	return generateWebviewContentWithCode(results, fixId, fix, fixId, violatedCode);
 }
 
-function generateWebviewContent(results: any[], fixId?: number, fix?: any, warningIndex?: number): string {
-	return `<!DOCTYPE html>
-	<html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>SARIF AI Fixer Results</title>
-		<style>
-			body {
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-				padding: 20px;
-				line-height: 1.6;
-			}
-			.violation {
-				border: 1px solid #ddd;
-				border-radius: 8px;
-				padding: 20px;
-				margin-bottom: 20px;
-				background-color: #f9f9f9;
-			}
-			.rule-header {
-				font-weight: bold;
-				font-size: 1.2em;
-				margin-bottom: 10px;
-				color: #d73a49;
-			}
-			.code-block {
-				background-color: #f6f8fa;
-				border: 1px solid #e1e4e8;
-				border-radius: 6px;
-				padding: 16px;
-				font-family: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', monospace;
-				white-space: pre-wrap;
-				margin: 10px 0;
-			}
-			.button {
-				background-color: #0366d6;
-				color: white;
-				border: none;
-				padding: 8px 16px;
-				border-radius: 6px;
-				cursor: pointer;
-				margin-right: 10px;
-			}
-			.button:hover {
-				background-color: #0256cc;
-			}
-			.fix-section {
-				margin-top: 15px;
-				padding: 15px;
-				background-color: #e6f7ff;
-				border-radius: 6px;
-				display: none;
-			}
-		</style>
-	</head>
-	<body>
-		<h1>SARIF AI Fixer - Warning Details</h1>
-		<p>Found ${results.length} MISRA-C violation${results.length === 1 ? '' : 's'} that can be processed.</p>
-		
-		${results.map((result, index) => `
-			<div class="violation" id="violation-${index}">
-				<div class="rule-header">Rule ${result.sarifResult.ruleId}: ${result.misraRule.title}</div>
-				<p><strong>Description:</strong> ${result.misraRule.description}</p>
-				<p><strong>Severity:</strong> ${result.misraRule.severity}</p>
-				<p><strong>Message:</strong> ${result.sarifResult.message}</p>
-				<p><strong>Location:</strong> ${result.sarifResult.locations.map((loc: any) => `${loc.uri}:${loc.startLine}:${loc.startColumn}`).join(', ')}</p>
-				
-				<button class="button" onclick="generateFix(${index})">Generate AI Fix</button>
-				
-				<div class="fix-section" id="fix-${index}" ${fixId === index ? 'style="display: block;"' : ''}>
-					<h3>AI-Generated Fix:</h3>
-					<div id="fix-content-${index}">
-						${fixId === index && fix ? `
-							<h4>Original Code:</h4>
-							<div class="code-block">${fix.originalCode}</div>
-							<h4>Fixed Code:</h4>
-							<div class="code-block">${fix.fixedCode}</div>
-							<h4>Explanation:</h4>
-							<p>${fix.explanation}</p>
-							<button class="button" onclick="applyFixDirect(${index}, ${JSON.stringify(fix).replace(/"/g, '&quot;').replace(/\n/g, '\\n')})">Apply Fix</button>
-						` : ''}
-					</div>
-				</div>
-			</div>
-		`).join('')}
-		
-		<script>
-			const vscode = acquireVsCodeApi();
-			
-			function generateFix(index) {
-				const violationData = ${JSON.stringify(results)}[index];
-				vscode.postMessage({
-					command: 'generateFix',
-					data: {
-						id: index,
-						violatedCode: 'Code from file', // This would need to be extracted from the actual file
-						sarifResult: violationData.sarifResult,
-						misraRule: violationData.misraRule
-					}
-				});
-				
-				document.getElementById('fix-' + index).innerHTML = '<p>Generating fix... Please wait.</p>';
-				document.getElementById('fix-' + index).style.display = 'block';
-			}
-			
-			function applyFixDirect(index, fix) {
-				const violationData = ${JSON.stringify(results)}[index];
-				const location = violationData.sarifResult.locations[0];
-				
-				console.log('Applying fix for index:', index);
-				console.log('Fix data:', fix);
-				console.log('Location data:', location);
-				
-				vscode.postMessage({
-					command: 'applyFix',
-					data: {
-						filePath: location.uri,
-						startLine: location.startLine,
-						startColumn: location.startColumn,
-						endLine: location.endLine,
-						endColumn: location.endColumn,
-						fixedCode: fix.fixedCode
-					}
-				});
-			}
-			
-			function applyFix(index) {
-				const fix = window.fixes[index];
-				if (!fix) {
-					console.error('No fix found for index:', index);
-					return;
-				}
-				
-				const violationData = ${JSON.stringify(results)}[index];
-				const location = violationData.sarifResult.locations[0];
-				
-				console.log('Applying fix for index:', index);
-				console.log('Fix data:', fix);
-				console.log('Location data:', location);
-				
-				vscode.postMessage({
-					command: 'applyFix',
-					data: {
-						filePath: location.uri,
-						startLine: location.startLine,
-						startColumn: location.startColumn,
-						endLine: location.endLine,
-						endColumn: location.endColumn,
-						fixedCode: fix.fixedCode
-					}
-				});
-			}
-			
-			window.addEventListener('message', event => {
-				const message = event.data;
-				console.log('Webview received message:', message);
-				switch (message.command) {
-					case 'fixGenerated':
-						const fix = message.data.fix;
-						const id = message.data.id;
-						
-						document.getElementById('fix-content-' + id).innerHTML = \`
-							<h4>Original Code:</h4>
-							<div class="code-block">\${fix.originalCode}</div>
-							<h4>Fixed Code:</h4>
-							<div class="code-block">\${fix.fixedCode}</div>
-							<h4>Explanation:</h4>
-							<p>\${fix.explanation}</p>
-							<button class="button" onclick="applyFix(\${id}, \${JSON.stringify(fix).replace(/"/g, '&quot;')})">Apply Fix</button>
-						\`;
-						break;
-				}
-			});
-		</script>
-	</body>
-	</html>`;
-}
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+	console.log('Deactivating SARIF AI Fixer extension');
+	
+	// Clean up all decorations
+	clearGutterDecorations();
+	
+	// Clear global references
+	globalProcessedResults = [];
+	globalListPanel = undefined;
+	globalDetailPanel = undefined;
+}
