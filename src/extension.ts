@@ -307,6 +307,9 @@ let globalProcessedResults: any[] = [];
 let globalListPanel: vscode.WebviewPanel | undefined;
 let globalDetailPanel: vscode.WebviewPanel | undefined;
 
+// Debouncing for decoration refreshes
+let decorationRefreshTimeout: NodeJS.Timeout | undefined;
+
 async function analyzeSarifFile(sarifFilePath: string, misraRuleIdentifier: MisraRuleIdentifier, context: vscode.ExtensionContext) {
 	try {
 		const sarifContent = fs.readFileSync(sarifFilePath, 'utf8');
@@ -695,6 +698,29 @@ function clearGutterDecorations() {
 	});
 }
 
+function clearDecorationsForFile(editor: vscode.TextEditor, filePath: string) {
+	console.log('Clearing decorations for file:', filePath);
+	
+	// Find and dispose decoration types for this specific file
+	const keysToRemove: string[] = [];
+	warningDecorations.forEach((decorationType, key) => {
+		if (key.startsWith(filePath + '-')) {
+			// Clear decorations using this decoration type
+			editor.setDecorations(decorationType, []);
+			keysToRemove.push(key);
+		}
+	});
+	
+	// Remove the cleared decoration types from the map
+	keysToRemove.forEach(key => {
+		const decorationType = warningDecorations.get(key);
+		if (decorationType) {
+			decorationType.dispose();
+			warningDecorations.delete(key);
+		}
+	});
+}
+
 function registerEventListeners(context: vscode.ExtensionContext) {
 	console.log('Registering event listeners for gutter interactions');
 	
@@ -733,7 +759,7 @@ function registerEventListeners(context: vscode.ExtensionContext) {
 		console.log('New active editor:', editor.document.uri.fsPath);
 		
 		// Apply decorations to the newly opened editor if it has violations
-		await refreshDecorationsForEditor(editor);
+		await refreshDecorationsForEditorDebounced(editor);
 	});
 	
 	// Listen for when visible editors change
@@ -745,11 +771,23 @@ function registerEventListeners(context: vscode.ExtensionContext) {
 		
 		// Apply decorations to all newly visible editors
 		for (const editor of editors) {
-			await refreshDecorationsForEditor(editor);
+			await refreshDecorationsForEditorDebounced(editor);
 		}
 	});
 	
 	context.subscriptions.push(selectionChangeListener, editorChangeListener, visibleEditorsChangeListener);
+}
+
+async function refreshDecorationsForEditorDebounced(editor: vscode.TextEditor) {
+	// Clear any existing timeout
+	if (decorationRefreshTimeout) {
+		clearTimeout(decorationRefreshTimeout);
+	}
+	
+	// Set a new timeout to refresh decorations after a brief delay
+	decorationRefreshTimeout = setTimeout(async () => {
+		await refreshDecorationsForEditor(editor);
+	}, 200); // 200ms delay
 }
 
 async function refreshDecorationsForEditor(editor: vscode.TextEditor) {
@@ -759,6 +797,9 @@ async function refreshDecorationsForEditor(editor: vscode.TextEditor) {
 	console.log('=== Refreshing Decorations ===');
 	console.log('Editor file:', filePath);
 	console.log('Editor filename:', fileName);
+	
+	// Clear existing decorations for this file first
+	clearDecorationsForFile(editor, filePath);
 	
 	// Find violations for this file
 	const fileViolations: { range: vscode.Range, violationIndex: number }[] = [];
@@ -1183,6 +1224,12 @@ ${indentedFixedCode}`;
 		
 		if (result) {
 			vscode.window.showInformationMessage('AI fix applied! Original code commented out and replaced with MISRA-compliant code.');
+			
+			// Refresh decorations for the current editor after applying the fix
+			const activeEditor = vscode.window.activeTextEditor;
+			if (activeEditor && activeEditor.document.uri.fsPath === filePath) {
+				await refreshDecorationsForEditor(activeEditor);
+			}
 		} else {
 			vscode.window.showErrorMessage('Failed to apply edit - edit was rejected');
 		}
