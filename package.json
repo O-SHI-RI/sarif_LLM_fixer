@@ -1,0 +1,70 @@
+{
+  "name": "sarif-ai-fixer",
+  "displayName": "SARIF AI Fixer",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sarif-ai-fixer.analyzeSarif",
+        "title": "Analyze SARIF File",
+        "category": "SARIF AI Fixer"
+      },
+      {
+        "command": "sarif-ai-fixer.configureAiApi",
+        "title": "Configure AI API",
+        "category": "SARIF AI Fixer"
+      },
+      {
+        "command": "sarif-ai-fixer.showApiStatus",
+        "title": "Show API Status",
+        "category": "SARIF AI Fixer"
+      },
+      {
+        "command": "sarif-ai-fixer.configureApiKey",
+        "title": "Configure OpenAI API Key",
+        "category": "SARIF AI Fixer"
+      },
+      {
+        "command": "sarif-ai-fixer.showWarningDetails",
+        "title": "Show Warning Details",
+        "category": "SARIF AI Fixer"
+      },
+      {
+        "command": "sarif-ai-fixer.configureAzureApi",
+        "title": "Configure Azure OpenAI",
+        "category": "SARIF AI Fixer"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.99.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.25.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "axios": "^1.9.0"
+  }
+}

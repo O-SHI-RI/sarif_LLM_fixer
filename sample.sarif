@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "MISRAStaticChecker",
+          "version": "1.0.0",
+          "informationUri": "https://example-analyzer.dev",
+          "rules": [
+            {
+              "id": "MISRA2012-10.1",
+              "shortDescription": { "text": "Signed/unsigned comparison." },
+              "fullDescription": {
+                "text": "Operands shall not be of an inappropriate essential type."
+              },
+              "helpUri": "https://www.misra.org.uk",
+              "properties": { "severity": "warning", "category": "type-safety" }
+            },
+            {
+              "id": "MISRA2012-11.3",
+              "shortDescription": { "text": "Cast between object pointer types." },
+              "fullDescription": {
+                "text": "A cast should not be performed between a pointer to object type and a pointer to a different object type."
+              },
+              "helpUri": "https://www.misra.org.uk",
+              "properties": { "severity": "warning", "category": "pointer-cast" }
+            },
+            {
+              "id": "MISRA2012-21.6",
+              "shortDescription": { "text": "Use of unsafe standard library function." },
+              "fullDescription": {
+                "text": "The standard library function 'sprintf' shall not be used."
+              },
+              "helpUri": "https://www.misra.org.uk",
+              "properties": { "severity": "warning", "category": "security" }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "MISRA2012-10.1",
+          "level": "warning",
+          "message": {
+            "text": "Signed/unsigned comparison: 'a > b' may lead to unexpected behavior."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "multi_misra_violation.c" },
+                "region": { "startLine": 8, "startColumn": 9 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "MISRA2012-11.3",
+          "level": "warning",
+          "message": {
+            "text": "Casting from void* to int* may violate object type alignment or strict aliasing."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "multi_misra_violation.c" },
+                "region": { "startLine": 11, "startColumn": 17 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "MISRA2012-21.6",
+          "level": "warning",
+          "message": {
+            "text": "'sprintf' is not allowed. Use safer alternatives such as 'snprintf'."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "multi_misra_violation.c" },
+                "region": { "startLine": 14, "startColumn": 5 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

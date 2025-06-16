@@ -1,0 +1,52 @@
+{
+  "rules": {
+    "10.1": {
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
+    },
+    "11.3": {
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
+    },
+    "11.4": {
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
+    },
+    "21.6": {
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
+    },
+    "8.7": {
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
+    },
+    "2.1": {
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
+    }
+  }
+}

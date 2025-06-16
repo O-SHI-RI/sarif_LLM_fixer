@@ -1,0 +1,81 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "MISRA-C Checker",
+          "version": "1.0.0"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "10.1",
+          "level": "error",
+          "message": {
+            "text": "MISRA 10.1: Operands shall not be of an inappropriate essential type (signed/unsigned comparison)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "misra_c_sample.c"
+                },
+                "region": {
+                  "startLine": 8,
+                  "startColumn": 9,
+                  "endLine": 8,
+                  "endColumn": 15
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "11.3",
+          "level": "error",
+          "message": {
+            "text": "MISRA 11.3: A cast shall not be performed between a pointer to object type and a pointer to a different object type"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "misra_c_sample.c"
+                },
+                "region": {
+                  "startLine": 13,
+                  "startColumn": 17,
+                  "endLine": 13,
+                  "endColumn": 27
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "21.6",
+          "level": "warning",
+          "message": {
+            "text": "MISRA 21.6: The Standard Library input/output library shall not be used (sprintf function)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "misra_c_sample.c"
+                },
+                "region": {
+                  "startLine": 16,
+                  "startColumn": 5,
+                  "endLine": 16,
+                  "endColumn": 11
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
