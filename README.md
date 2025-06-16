@@ -80,56 +80,64 @@ export AZURE_OPENAI_ENDPOINT="https://your-company-proxy.corp.com"
 export AZURE_OPENAI_DEPLOYMENT="gpt-4"
 ```
 
-## Extension Settings
+## Dependencies & Licensing
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+This extension uses corporate-friendly, permissive open-source packages:
 
-For example:
+### Runtime Dependencies
+- **[axios](https://github.com/axios/axios)** `^1.9.0` - MIT License
+  - HTTP client for AI API communication
+  - Used for OpenAI and Azure OpenAI API requests
 
-This extension contributes the following settings:
+### Development Dependencies
+- **[TypeScript](https://github.com/microsoft/TypeScript)** `^5.8.3` - Apache-2.0 License
+  - Primary development language
+- **[ESLint](https://github.com/eslint/eslint)** `^9.25.1` - MIT License
+  - Code linting and quality assurance
+- **[@typescript-eslint/eslint-plugin](https://github.com/typescript-eslint/typescript-eslint)** `^8.31.1` - MIT License
+  - TypeScript-specific ESLint rules
+- **[@typescript-eslint/parser](https://github.com/typescript-eslint/typescript-eslint)** `^8.31.1` - MIT License
+  - TypeScript parser for ESLint
+- **[@types/vscode](https://github.com/DefinitelyTyped/DefinitelyTyped)** `^1.99.0` - MIT License
+  - TypeScript definitions for VS Code API
+- **[@types/node](https://github.com/DefinitelyTyped/DefinitelyTyped)** `20.x` - MIT License
+  - TypeScript definitions for Node.js
+- **[@types/mocha](https://github.com/DefinitelyTyped/DefinitelyTyped)** `^10.0.10` - MIT License
+  - TypeScript definitions for Mocha testing framework
+- **[@vscode/test-cli](https://github.com/microsoft/vscode-test)** `^0.0.10` - MIT License
+  - VS Code extension testing CLI
+- **[@vscode/test-electron](https://github.com/microsoft/vscode-test)** `^2.5.2` - MIT License
+  - VS Code extension testing in Electron environment
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### License Summary
+- **Total packages**: ~260 (including transitive dependencies)
+- **MIT License**: 193 packages (74%) - Most permissive
+- **Apache-2.0**: 14 packages (5%) - Business-friendly with patent protection
+- **ISC License**: 35 packages (13%) - Permissive, similar to MIT
+- **BSD Licenses**: 13 packages (5%) - Permissive with attribution
+- **Other permissive**: 6 packages (2%)
 
-## Known Issues
+### Corporate Compliance
+✅ **100% Corporate-Friendly**: All dependencies use permissive licenses  
+✅ **No Copyleft**: No GPL, AGPL, or other viral licenses  
+✅ **Commercial Use**: All packages allow commercial usage and modification  
+✅ **Patent Safe**: Apache-2.0 packages include patent protection clauses
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+## License
+
+This extension is licensed under the [MIT License](LICENSE) - making it free for both personal and commercial use.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1 (Initial Release)
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- ✨ SARIF file parsing and analysis
+- 🤖 AI-powered fix generation (OpenAI & Azure OpenAI)
+- 🎨 Interactive gutter decorations with severity indicators
+- 📱 Dual-panel violation browser interface
+- 🔧 Automatic code fix application with original code preservation
+- 🏢 Corporate proxy and custom endpoint support
 
 ---
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
 
 **Enjoy!**
