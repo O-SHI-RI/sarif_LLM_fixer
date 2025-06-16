@@ -80,48 +80,21 @@ export AZURE_OPENAI_ENDPOINT="https://your-company-proxy.corp.com"
 export AZURE_OPENAI_DEPLOYMENT="gpt-4"
 ```
 
-## Dependencies & Licensing
-
-This extension uses corporate-friendly, permissive open-source packages:
+## Package Information
 
 ### Runtime Dependencies
-- **[axios](https://github.com/axios/axios)** `^1.9.0` - MIT License
-  - HTTP client for AI API communication
-  - Used for OpenAI and Azure OpenAI API requests
+- **axios** `^1.9.0` - HTTP client for AI API communication
 
 ### Development Dependencies
-- **[TypeScript](https://github.com/microsoft/TypeScript)** `^5.8.3` - Apache-2.0 License
-  - Primary development language
-- **[ESLint](https://github.com/eslint/eslint)** `^9.25.1` - MIT License
-  - Code linting and quality assurance
-- **[@typescript-eslint/eslint-plugin](https://github.com/typescript-eslint/typescript-eslint)** `^8.31.1` - MIT License
-  - TypeScript-specific ESLint rules
-- **[@typescript-eslint/parser](https://github.com/typescript-eslint/typescript-eslint)** `^8.31.1` - MIT License
-  - TypeScript parser for ESLint
-- **[@types/vscode](https://github.com/DefinitelyTyped/DefinitelyTyped)** `^1.99.0` - MIT License
-  - TypeScript definitions for VS Code API
-- **[@types/node](https://github.com/DefinitelyTyped/DefinitelyTyped)** `20.x` - MIT License
-  - TypeScript definitions for Node.js
-- **[@types/mocha](https://github.com/DefinitelyTyped/DefinitelyTyped)** `^10.0.10` - MIT License
-  - TypeScript definitions for Mocha testing framework
-- **[@vscode/test-cli](https://github.com/microsoft/vscode-test)** `^0.0.10` - MIT License
-  - VS Code extension testing CLI
-- **[@vscode/test-electron](https://github.com/microsoft/vscode-test)** `^2.5.2` - MIT License
-  - VS Code extension testing in Electron environment
-
-### License Summary
-- **Total packages**: ~260 (including transitive dependencies)
-- **MIT License**: 193 packages (74%) - Most permissive
-- **Apache-2.0**: 14 packages (5%) - Business-friendly with patent protection
-- **ISC License**: 35 packages (13%) - Permissive, similar to MIT
-- **BSD Licenses**: 13 packages (5%) - Permissive with attribution
-- **Other permissive**: 6 packages (2%)
-
-### Corporate Compliance
-✅ **100% Corporate-Friendly**: All dependencies use permissive licenses  
-✅ **No Copyleft**: No GPL, AGPL, or other viral licenses  
-✅ **Commercial Use**: All packages allow commercial usage and modification  
-✅ **Patent Safe**: Apache-2.0 packages include patent protection clauses
+- **@types/mocha** `^10.0.10` - TypeScript definitions for Mocha testing framework
+- **@types/node** `20.x` - TypeScript definitions for Node.js
+- **@types/vscode** `^1.100.0` - TypeScript definitions for VS Code API
+- **@typescript-eslint/eslint-plugin** `^8.33.1` - TypeScript-specific ESLint rules
+- **@typescript-eslint/parser** `^8.33.1` - TypeScript parser for ESLint
+- **@vscode/test-cli** `^0.0.10` - VS Code extension testing CLI
+- **@vscode/test-electron** `^2.5.2` - VS Code extension testing in Electron environment
+- **eslint** `^9.28.0` - Code linting and quality assurance
+- **typescript** `^5.8.3` - Primary development language
 
 ## License
 
