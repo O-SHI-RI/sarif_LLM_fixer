@@ -112,5 +112,4 @@ This extension is licensed under the [MIT License](LICENSE) - making it free for
 - 🏢 Corporate proxy and custom endpoint support
 
 ---
-
 **Enjoy!**
