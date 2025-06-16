@@ -1,52 +1,52 @@
 {
   "rules": {
     "10.1": {
-      "title": "Operands shall not be of an inappropriate essential type",
-      "description": "This rule prohibits the use of operands that have an inappropriate essential type. Comparisons between signed and unsigned integer types should be avoided.",
-      "category": "Essential type model",
-      "severity": "Required",
-      "example": "Avoid comparing signed and unsigned integers directly",
-      "remediation": "Cast operands to the same type before comparison or use appropriate type conversions"
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
     },
     "11.3": {
-      "title": "A cast shall not be performed between a pointer to object type and a pointer to a different object type",
-      "description": "This rule prohibits casting from a pointer to one object type to a pointer to a different object type, including void*.",
-      "category": "Pointer type conversions",
-      "severity": "Required",
-      "example": "Avoid casting void* to specific pointer types",
-      "remediation": "Use appropriate type-safe casting or avoid the cast entirely by using proper typing"
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
     },
     "11.4": {
-      "title": "A conversion should not be performed between a pointer to object and an integer type",
-      "description": "This rule prohibits conversions between pointers and integer types.",
-      "category": "Pointer type conversions",
-      "severity": "Advisory",
-      "example": "Do not cast pointers to integers or vice versa",
-      "remediation": "Use appropriate pointer operations instead of integer conversions"
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
     },
     "21.6": {
-      "title": "The Standard Library input/output library shall not be used",
-      "description": "Functions like sprintf, printf, scanf are considered unsafe and should be avoided in safety-critical applications.",
-      "category": "Standard library",
-      "severity": "Required",
-      "example": "Avoid using sprintf, printf, scanf functions",
-      "remediation": "Use safer alternatives like snprintf with proper bounds checking or custom safe string functions"
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
     },
     "8.7": {
-      "title": "Functions and objects should not be defined with external linkage if they are referenced in only one translation unit",
-      "description": "Objects and functions with external linkage that are only used in one translation unit should be declared static.",
-      "category": "Declarations and definitions",
-      "severity": "Advisory",
-      "example": "Functions used only in one file should be declared static",
-      "remediation": "Add static keyword to functions and variables that are only used locally"
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
     },
     "2.1": {
-      "title": "A project shall not contain unreachable code",
-      "description": "Code that can never be executed should be removed from the project.",
-      "category": "Language extensions",
-      "severity": "Required",
-      "example": "Remove code after return statements or in unreachable branches",
-      "remediation": "Remove or restructure code to eliminate unreachable sections"
+      "title": "",
+      "description": "",
+      "category": "",
+      "severity": "",
+      "example": "",
+      "remediation": ""
     }
   }
 }
