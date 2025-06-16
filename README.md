@@ -1,4 +1,4 @@
-# SARIF AI Fixer
+# SARIF LLM Fixer
 
 A sophisticated VS Code extension that analyzes SARIF files for MISRA-C violations and provides AI-powered fixes using OpenAI or Azure OpenAI.
 
